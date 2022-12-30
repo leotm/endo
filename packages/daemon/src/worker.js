@@ -21,7 +21,9 @@ const endowments = harden({
  * @param {() => any} _getDaemonBootstrap
  * @param {(error: Error) => void} cancel
  */
-const makeWorkerFacet = (_getDaemonBootstrap, cancel) => {
+export const makeWorkerFacet = (_getDaemonBootstrap, cancel) => {
+  const powerBox = Far('EndoPowerBox', {});
+
   return Far('EndoWorkerFacet', {
     terminate: async () => {
       console.error('Endo worker received terminate request');
@@ -43,6 +45,14 @@ const makeWorkerFacet = (_getDaemonBootstrap, cancel) => {
         }),
       );
       return compartment.evaluate(source);
+    },
+
+    /**
+     * @param {string} path
+     */
+    importUnsafe0: async path => {
+      const namespace = await import(path);
+      return namespace.main0(powerBox);
     },
   });
 };

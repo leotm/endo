@@ -87,4 +87,15 @@ type EvalRef = {
   refs: Record<string, Ref>;
 };
 
-export type Ref = ReadableSha512Ref | WorkerUuidRef | ValueUuid | EvalRef;
+type ImportUnsafe0Ref = {
+  type: 'importUnsafe0';
+  workerUuid: string;
+  importPath: string;
+};
+
+export type Ref =
+  | ReadableSha512Ref
+  | WorkerUuidRef
+  | ValueUuid
+  | EvalRef
+  | ImportUnsafe0Ref;
