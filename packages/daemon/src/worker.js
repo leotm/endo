@@ -18,11 +18,16 @@ const endowments = harden({
  */
 
 /**
- * @param {() => any} _getDaemonBootstrap
+ * @param {() => any} getDaemonBootstrap
  * @param {(error: Error) => void} cancel
  */
-export const makeWorkerFacet = (_getDaemonBootstrap, cancel) => {
-  const powerBox = Far('EndoPowerBox', {});
+export const makeWorkerFacet = (getDaemonBootstrap, cancel) => {
+  const powerBox = Far('EndoPowerBox', {
+    request: async (what, name) => {
+      const daemon = getDaemonBootstrap();
+      return E(daemon).request(what, name);
+    },
+  });
 
   return Far('EndoWorkerFacet', {
     terminate: async () => {
