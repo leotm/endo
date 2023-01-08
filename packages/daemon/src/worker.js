@@ -59,6 +59,17 @@ export const makeWorkerFacet = (getDaemonBootstrap, cancel) => {
       const namespace = await import(path);
       return namespace.main0(powerBox);
     },
+
+    importBundle0: async readable => {
+      const bundleText = await E(readable).text();
+      const bundle = JSON.parse(bundleText);
+
+      const { importBundle } = await import('@endo/import-bundle');
+      const namespace = await importBundle(bundle, {
+        endowments,
+      });
+      return namespace.main0(powerBox);
+    },
   });
 };
 
