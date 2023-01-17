@@ -2,8 +2,13 @@ import 'ses';
 import fs from 'fs';
 import url from 'url';
 import test from 'ava';
-import vm from 'vm'
-import { makeBundle, makeSecureBundle, makeArchive, parseArchive } from '../index.js';
+import vm from 'vm';
+import {
+  makeBundle,
+  makeSecureBundle,
+  makeArchive,
+  parseArchive,
+} from '../index.js';
 import { makeReadPowers } from '../node-powers.js';
 
 const fixture = new URL(
@@ -77,16 +82,17 @@ test('equivalent archive behaves the same as bundle', async t => {
   t.deepEqual(log, expectedLog);
 });
 
-test('secure bundles work', async t => {
+test.only('secure bundles work', async t => {
   const bundle = await makeSecureBundle(read, fixture);
   // console.log(bundle)
-  // fs.writeFileSync('xyz.js', bundle)
+  fs.writeFileSync('xyz.cjs', bundle);
 
   const log = [];
   const print = entry => {
     log.push(entry);
   };
-  vm.runInNewContext(bundle, { print });
+  const namespace = await vm.runInNewContext(bundle, { print, TextDecoder, TextEncoder });
+  console.log(namespace)
 
   t.deepEqual(log, expectedLog);
 });

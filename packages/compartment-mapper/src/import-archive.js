@@ -14,6 +14,7 @@
 /** @typedef {import('./types.js').ComputeSourceLocationHook} ComputeSourceLocationHook */
 /** @typedef {import('./types.js').LoadArchiveOptions} LoadArchiveOptions */
 /** @typedef {import('./types.js').ExecuteOptions} ExecuteOptions */
+/** @typedef {import('./types.js').ParserForLanguage} ParserForLanguage */
 
 import { ZipReader } from '@endo/zip';
 import { link } from './link.js';
@@ -35,8 +36,8 @@ const textDecoder = new TextDecoder();
 
 const { freeze } = Object;
 
-/** @type {Record<string, ParserImplementation>} */
-const parserForLanguage = {
+/** @type {ParserForLanguage} */
+export const defaultParserForLanguage = {
   'pre-cjs-json': parserPreCjs,
   'pre-mjs-json': parserPreMjs,
   json: parserJson,
@@ -78,14 +79,16 @@ const postponeErrorToExecute = errorMessage => {
  * @param {string} archiveLocation
  * @param {HashFn} [computeSha512]
  * @param {ComputeSourceLocationHook} [computeSourceLocation]
+ * @param {ParserForLanguage} [parserForLanguage]
  * @returns {ArchiveImportHookMaker}
  */
-const makeArchiveImportHookMaker = (
+export const makeArchiveImportHookMaker = (
   get,
   compartments,
   archiveLocation,
   computeSha512 = undefined,
   computeSourceLocation = undefined,
+  parserForLanguage = defaultParserForLanguage,
 ) => {
   // per-assembly:
   /** @type {ArchiveImportHookMaker} */
@@ -192,6 +195,7 @@ const makeFeauxModuleExportsNamespace = Compartment => {
  * @param {Record<string, unknown>} [options.modules]
  * @param {Compartment} [options.Compartment]
  * @param {ComputeSourceLocationHook} [options.computeSourceLocation]
+ * @param {ParserForLanguage} [options.parserForLanguage]
  * @returns {Promise<Application>}
  */
 export const parseArchive = async (
@@ -205,6 +209,7 @@ export const parseArchive = async (
     computeSourceLocation = undefined,
     Compartment = DefaultCompartment,
     modules = undefined,
+    parserForLanguage = defaultParserForLanguage,
   } = options;
 
   const archive = new ZipReader(archiveBytes, { name: archiveLocation });
@@ -265,6 +270,7 @@ export const parseArchive = async (
       archiveLocation,
       computeSha512,
       computeSourceLocation,
+      parserForLanguage,
     );
     // A weakness of the current Compartment design is that the `modules` map
     // must be given a module namespace object that passes a brand check.
@@ -298,6 +304,7 @@ export const parseArchive = async (
       archiveLocation,
       computeSha512,
       computeSourceLocation,
+      parserForLanguage,
     );
     const { compartment } = link(compartmentMap, {
       makeImportHook,
@@ -327,13 +334,15 @@ export const loadArchive = async (
   options = {},
 ) => {
   const { read, computeSha512 } = unpackReadPowers(readPowers);
-  const { expectedSha512, computeSourceLocation, modules } = options;
+  const { expectedSha512, computeSourceLocation, modules, parserForLanguage } =
+    options;
   const archiveBytes = await read(archiveLocation);
   return parseArchive(archiveBytes, archiveLocation, {
     computeSha512,
     expectedSha512,
     computeSourceLocation,
     modules,
+    parserForLanguage,
   });
 };
 

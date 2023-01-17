@@ -5,6 +5,7 @@
 /** @typedef {import('ses').PrecompiledStaticModuleInterface} PrecompiledStaticModuleInterface */
 /** @typedef {import('./types.js').ParserImplementation} ParserImplementation */
 /** @typedef {import('./types.js').CompartmentDescriptor} CompartmentDescriptor */
+/** @typedef {import('./types.js').CompartmentMapDescriptor} CompartmentMapDescriptor */
 /** @typedef {import('./types.js').CompartmentSources} CompartmentSources */
 /** @typedef {import('./types.js').ReadFn} ReadFn */
 /** @typedef {import('./types.js').ModuleTransforms} ModuleTransforms */
@@ -13,6 +14,8 @@
 /** @typedef {import('./types.js').ArchiveOptions} ArchiveOptions */
 
 import fs from 'fs';
+/* eslint-disable-next-line import/no-unresolved */
+import { evadeImportExpressionTest } from 'ses/transforms';
 import { resolve } from './node-module-specifier.js';
 import { compartmentMapForNodeModules } from './node-modules.js';
 import { search } from './search.js';
@@ -21,6 +24,7 @@ import { makeImportHookMaker } from './import-hook.js';
 import parserJson from './parse-json.js';
 import parserText from './parse-text.js';
 import parserBytes from './parse-bytes.js';
+import { makeArchiveCompartmentMap, locationsForSources } from './archive.js';
 import parserArchiveCjs from './parse-archive-cjs.js';
 import parserArchiveMjs from './parse-archive-mjs.js';
 import { parseLocatedJson } from './json.js';
@@ -29,6 +33,7 @@ import mjsSupport from './bundle-mjs.js';
 import cjsSupport from './bundle-cjs.js';
 
 const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
 
 /** @type {Record<string, ParserImplementation>} */
 const parserForLanguage = {
@@ -169,7 +174,8 @@ function getBundlerKitForModule(module) {
  * @param {Set<string>} [options.tags]
  * @param {Array<string>} [options.searchSuffixes]
  * @param {Object} [options.commonDependencies]
- * @returns {Promise<BundleKit>}
+ * @param {Object} [options.linkOptions]
+ * @returns {Promise<{compartmentMap: CompartmentMapDescriptor, sources: Sources, resolvers: Record<string,ResolveHook> }>}
  */
 export const prepareToBundle = async (read, moduleLocation, options) => {
   const {
@@ -178,6 +184,7 @@ export const prepareToBundle = async (read, moduleLocation, options) => {
     tags: tagsOption,
     searchSuffixes,
     commonDependencies,
+    linkOptions = {},
   } = options || {};
   const tags = new Set(tagsOption);
 
@@ -203,7 +210,7 @@ export const prepareToBundle = async (read, moduleLocation, options) => {
 
   const {
     compartments,
-    entry: { compartment: entryCompartmentName, module: entryModuleSpecifier },
+    entry: { module: entryModuleSpecifier },
   } = compartmentMap;
   /** @type {Sources} */
   const sources = Object.create(null);
@@ -224,8 +231,200 @@ export const prepareToBundle = async (read, moduleLocation, options) => {
     makeImportHook,
     moduleTransforms,
     parserForLanguage,
+    ...linkOptions,
   });
   await compartment.load(entryModuleSpecifier);
+
+  return { compartmentMap, sources, resolvers };
+};
+
+function wrapFunctorInPrecompiledModule(functorSrc, compartmentName) {
+  const wrappedSrc = `() => (function(){
+  with (this.scopeTerminator) {
+  with (this.globalThis) {
+    return function() {
+      'use strict';
+      return (
+${functorSrc}
+      );
+    };
+  }
+  }
+}).call(getEvalKitForCompartment(${JSON.stringify(compartmentName)}))()`;
+  return wrappedSrc;
+}
+
+/**
+ * @param {ReadFn} read
+ * @param {string} moduleLocation
+ * @param {Object} [options]
+ * @param {ModuleTransforms} [options.moduleTransforms]
+ * @param {boolean} [options.dev]
+ * @param {Set<string>} [options.tags]
+ * @param {Array<string>} [options.searchSuffixes]
+ * @param {Object} [options.commonDependencies]
+ * @returns {Promise<string>}
+ */
+export const makeSecureBundle = async (read, moduleLocation, options) => {
+  const { compartmentMap, sources } = await prepareToBundle(
+    read,
+    moduleLocation,
+    {
+      linkOptions: { archiveOnly: true },
+      ...options,
+    },
+  );
+
+  const { archiveCompartmentMap, archiveSources } = makeArchiveCompartmentMap(
+    compartmentMap,
+    sources,
+  );
+
+  const moduleFunctors = {};
+  const moduleRegistry = {};
+
+  for (const {
+    path,
+    module: { bytes },
+    compartment,
+  } of locationsForSources(archiveSources)) {
+    const textModule = textDecoder.decode(bytes);
+    const moduleData = JSON.parse(textModule);
+    const { __syncModuleProgram__, source, ...otherModuleData } = moduleData;
+    // record module data
+    moduleRegistry[path] = otherModuleData;
+    // record functor
+    if (__syncModuleProgram__) {
+      // esm
+      moduleFunctors[path] = wrapFunctorInPrecompiledModule(
+        __syncModuleProgram__,
+        compartment,
+      );
+    } else {
+      // cjs
+      moduleFunctors[path] = wrapFunctorInPrecompiledModule(
+        source,
+        compartment,
+      );
+    }
+  }
+
+  const sesShimLocation = new URL(
+    '../../ses/dist/lockdown.umd.js',
+    import.meta.url,
+  );
+  const sesShim = fs.readFileSync(sesShimLocation, 'utf8');
+
+  const bundleRuntimeLocation = new URL(
+    './bundle-runtime.js',
+    import.meta.url,
+  ).toString();
+  const runtimeBundle = evadeImportExpressionTest(
+    await makeBundle(read, bundleRuntimeLocation),
+  ).replace(`'use strict';\n(() => `, `'use strict';\nreturn (() => `);
+
+  const bundle = `\
+// START SES SHIM ================================
+;(function(){
+${sesShim}
+})()
+lockdown();
+// END SES SHIM ==================================
+
+// START BUNDLE RUNTIME ================================
+const { loadApplication } = (function(){
+${runtimeBundle}
+})();
+// END BUNDLE RUNTIME ================================
+
+// START MODULE REGISTRY ================================
+const compartmentMap = ${JSON.stringify(archiveCompartmentMap, null, 2)};
+const moduleRegistry = ${JSON.stringify(moduleRegistry, null, 2)}
+
+const strictScopeTerminator = makeStrictScopeHandler();
+${makeStrictScopeHandler}
+${getEvalKitForCompartment}
+const moduleFunctors = ${renderFunctorTable(moduleFunctors)}
+// END MODULE REGISTRY ==================================
+
+const { compartments, execute } = loadApplication(
+  compartmentMap,
+  moduleRegistry,
+  moduleFunctors,
+  'xxx',
+  // can be undefined
+  undefined,
+  undefined,
+  { globals: globalThis },
+)
+
+${getCompartmentByName}
+
+execute()
+`;
+  // ;(() => {
+
+  // ${''.concat(...Array.from(parsersInUse).map(parser => getRuntime(parser)))}
+
+  // ${''.concat(...modules.map(m => m.bundlerKit.getFunctorCall()))}\
+
+  //   ${getCompartmentByName}
+  //   ${getEvalKitForModule}
+  //   ${getEvalKitForCompartment}
+  //   ${makeStrictScopeHandler}
+
+  //   return cells[cells.length - 1]['*'].get();
+  // })();
+  // `;
+
+  return bundle;
+};
+
+function getCompartmentByName(name) {
+  let compartment = compartments[name];
+  if (compartment === undefined) {
+    compartment = new Compartment();
+    compartments[name] = compartment;
+  }
+  return compartment;
+}
+
+function getEvalKitForCompartment(compartmentName) {
+  const compartment = getCompartmentByName(compartmentName);
+  const scopeTerminator = strictScopeTerminator;
+  const { globalThis } = compartment;
+  return { globalThis, scopeTerminator };
+}
+
+function renderFunctorTable(functorTable) {
+  const entries = Object.entries(functorTable);
+  const lines = entries.map(
+    ([key, value]) => `${JSON.stringify(key)}: ${value}`,
+  );
+  return `{\n${lines.map(line => `  ${line}`).join(',\n')}\n};`;
+}
+
+/**
+ * @param {ReadFn} read
+ * @param {string} moduleLocation
+ * @param {Object} [options]
+ * @param {ModuleTransforms} [options.moduleTransforms]
+ * @param {boolean} [options.dev]
+ * @param {Set<string>} [options.tags]
+ * @param {Array<string>} [options.searchSuffixes]
+ * @param {Object} [options.commonDependencies]
+ * @returns {Promise<string>}
+ */
+export const makeBundle = async (read, moduleLocation, options) => {
+  const { compartmentMap, sources, resolvers } = await prepareToBundle(
+    read,
+    moduleLocation,
+    options,
+  );
+
+  const {
+    entry: { compartment: entryCompartmentName, module: entryModuleSpecifier },
+  } = compartmentMap;
 
   const modules = sortedModules(
     compartmentMap.compartments,
@@ -254,150 +453,6 @@ export const prepareToBundle = async (read, moduleLocation, options) => {
     parsersInUse.add(module.parser);
     module.bundlerKit = getBundlerKitForModule(module);
   }
-
-  return { modules, parsersInUse };
-};
-
-function wrapFunctorInPrecompiledModule (functorSrc, moduleIndex) {
-  const wrappedSrc = (
-`(function(){
-  with (this.scopeTerminator) {
-  with (this.globalThis) {
-    return function() {
-      'use strict';
-      return (
-${functorSrc}
-      );
-    };
-  }
-  }
-}).call(getEvalKitForModule(${moduleIndex}))()`)
-  return wrappedSrc
-}
-
-/**
- * @param {ReadFn} read
- * @param {string} moduleLocation
- * @param {Object} [options]
- * @param {ModuleTransforms} [options.moduleTransforms]
- * @param {boolean} [options.dev]
- * @param {Set<string>} [options.tags]
- * @param {Array<string>} [options.searchSuffixes]
- * @param {Object} [options.commonDependencies]
- * @returns {Promise<string>}
- */
-export const makeSecureBundle = async (read, moduleLocation, options) => {
-  const { modules, parsersInUse } = await prepareToBundle(
-    read,
-    moduleLocation,
-    options,
-  );
-
-  function getCompartmentByName (name) {
-    let compartment = compartments[name];
-    if (compartment === undefined) {
-      compartment = new Compartment();
-      compartments[name] = compartment;
-    }
-    return compartment;
-  }
-
-  function getEvalKitForModule (moduleIndex) {
-    const compartmentName = compartmentsForModule[moduleIndex]
-    const compartment = getCompartmentByName(compartmentName)
-    const evalKit = getEvalKitForCompartment(compartment)
-    return evalKit
-  }
-
-  const sesShimLocation = new URL(
-    '../../ses/dist/lockdown.umd.js',
-    import.meta.url,
-  );
-  const sesShim = fs.readFileSync(sesShimLocation, 'utf8')
-
-  const bundle = `\
-;(function(){
-${sesShim}
-})()
-lockdown();
-
-;(() => {
-  const strictScopeTerminator = makeStrictScopeHandler();
-  const compartments = { __proto__: null }
-
-  const compartmentsForModule = [
-    ${''.concat(modules.map(m => JSON.stringify(m.compartmentName)).join(','))}\
-  ]
-
-  const functors = [
-${''.concat(modules.map((m, index) => wrapFunctorInPrecompiledModule(m.bundlerKit.getFunctor(), index)).join(','))}\
-]; // functors end
-
-  const cell = (name, value = undefined) => {
-    const observers = [];
-    return Object.freeze({
-      get: Object.freeze(() => {
-        return value;
-      }),
-      set: Object.freeze((newValue) => {
-        value = newValue;
-        for (const observe of observers) {
-          observe(value);
-        }
-      }),
-      observe: Object.freeze((observe) => {
-        observers.push(observe);
-        observe(value);
-      }),
-      enumerable: true,
-    });
-  };
-
-  const cells = [
-${''.concat(...modules.map(m => m.bundlerKit.getCells()))}\
-  ];
-
-${''.concat(...modules.map(m => m.bundlerKit.getReexportsWiring()))}\
-
-  const namespaces = cells.map(cells => Object.freeze(Object.create(null, cells)));
-
-  for (let index = 0; index < namespaces.length; index += 1) {
-    cells[index]['*'] = cell('*', namespaces[index]);
-  }
-
-${''.concat(...Array.from(parsersInUse).map(parser => getRuntime(parser)))}
-
-${''.concat(...modules.map(m => m.bundlerKit.getFunctorCall()))}\
-
-  ${getCompartmentByName}
-  ${getEvalKitForModule}
-  ${getEvalKitForCompartment}
-  ${makeStrictScopeHandler}
-
-  return cells[cells.length - 1]['*'].get();
-})();
-`;
-
-  return bundle;
-};
-
-/**
- * @param {ReadFn} read
- * @param {string} moduleLocation
- * @param {Object} [options]
- * @param {ModuleTransforms} [options.moduleTransforms]
- * @param {boolean} [options.dev]
- * @param {Set<string>} [options.tags]
- * @param {Array<string>} [options.searchSuffixes]
- * @param {Object} [options.commonDependencies]
- * @returns {Promise<string>}
- */
-export const makeBundle = async (read, moduleLocation, options) => {
-  const { modules, parsersInUse } = await prepareToBundle(
-    read,
-    moduleLocation,
-    options,
-  );
 
   const bundle = `\
 'use strict';
@@ -468,21 +523,20 @@ export const writeBundle = async (
   await write(bundleLocation, bundleBytes);
 };
 
-
-function makeStrictScopeHandler () {
+function makeStrictScopeHandler() {
   const { freeze, create, getOwnPropertyDescriptors } = Object;
   const immutableObject = freeze(create(null));
 
   // import { assert } from './error/assert.js';
   const assert = {
-    fail: (msg) => {
+    fail: msg => {
       throw new Error(msg);
-    }
-  }
+    },
+  };
 
   // const { details: d, quote: q } = assert;
   const d = (strings, args) => strings.join() + args.join();
-  const q = (arg) => arg
+  const q = arg => arg;
 
   /**
    * alwaysThrowHandler
@@ -504,11 +558,11 @@ function makeStrictScopeHandler () {
   );
 
   /*
-  * scopeProxyHandlerProperties
-  * scopeTerminatorHandler manages a strictScopeTerminator Proxy which serves as
-  * the final scope boundary that will always return "undefined" in order
-  * to prevent access to "start compartment globals".
-  */
+   * scopeProxyHandlerProperties
+   * scopeTerminatorHandler manages a strictScopeTerminator Proxy which serves as
+   * the final scope boundary that will always return "undefined" in order
+   * to prevent access to "start compartment globals".
+   */
   const scopeProxyHandlerProperties = {
     get(_shadow, _prop) {
       return undefined;
@@ -561,11 +615,5 @@ function makeStrictScopeHandler () {
     strictScopeTerminatorHandler,
   );
 
-  return { strictScopeTerminator }
-}
-
-function getEvalKitForCompartment (compartment) {
-  const scopeTerminator = strictScopeTerminator;
-  const { globalThis } = compartment;
-  return { globalThis, scopeTerminator };
+  return { strictScopeTerminator };
 }

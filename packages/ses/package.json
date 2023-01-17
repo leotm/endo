@@ -45,6 +45,9 @@
     "./transforms": {
       "import": "./src/transforms.js"
     },
+    "./src/module-instance.js": {
+      "import": "./src/module-instance.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

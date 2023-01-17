@@ -15,4 +15,3 @@ export {
 export { search } from './src/search.js';
 export { compartmentMapForNodeModules } from './src/node-modules.js';
 export { makeBundle, makeSecureBundle, writeBundle } from './src/bundle.js';
-

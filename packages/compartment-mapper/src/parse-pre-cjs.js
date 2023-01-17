@@ -26,8 +26,13 @@ export const parsePreCjs = async (
    * @param {Compartment} compartment
    * @param {Record<string, string>} resolvedImports
    */
-  const execute = (moduleEnvironmentRecord, compartment, resolvedImports) => {
-    const functor = compartment.evaluate(source);
+  const execute = (moduleEnvironmentRecord, compartment, resolvedImports, precompiledFunctor) => {
+    let functor
+    if (precompiledFunctor !== undefined) {
+      functor = precompiledFunctor
+    } else {
+      functor = compartment.evaluate(source);
+    }
 
     const { require, moduleExports, module, afterExecute } = wrap({
       moduleEnvironmentRecord,
