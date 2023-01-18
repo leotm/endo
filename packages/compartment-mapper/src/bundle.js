@@ -362,20 +362,6 @@ ${getCompartmentByName}
 
 execute()
 `;
-  // ;(() => {
-
-  // ${''.concat(...Array.from(parsersInUse).map(parser => getRuntime(parser)))}
-
-  // ${''.concat(...modules.map(m => m.bundlerKit.getFunctorCall()))}\
-
-  //   ${getCompartmentByName}
-  //   ${getEvalKitForModule}
-  //   ${getEvalKitForCompartment}
-  //   ${makeStrictScopeHandler}
-
-  //   return cells[cells.length - 1]['*'].get();
-  // })();
-  // `;
 
   return bundle;
 };
@@ -523,6 +509,7 @@ export const writeBundle = async (
   await write(bundleLocation, bundleBytes);
 };
 
+// TODO: import from ses
 function makeStrictScopeHandler() {
   const { freeze, create, getOwnPropertyDescriptors } = Object;
   const immutableObject = freeze(create(null));

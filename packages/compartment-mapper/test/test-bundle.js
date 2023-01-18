@@ -82,17 +82,17 @@ test('equivalent archive behaves the same as bundle', async t => {
   t.deepEqual(log, expectedLog);
 });
 
-test.only('secure bundles work', async t => {
+test('secure bundles work', async t => {
   const bundle = await makeSecureBundle(read, fixture);
-  // console.log(bundle)
-  fs.writeFileSync('xyz.cjs', bundle);
-
   const log = [];
   const print = entry => {
     log.push(entry);
   };
-  const namespace = await vm.runInNewContext(bundle, { print, TextDecoder, TextEncoder });
-  console.log(namespace)
-
+  // bundle contains ses-shim and lockdown() call so we run in fresh Realm
+  const appExecPromise = vm.runInNewContext(bundle, { print, TextDecoder, TextEncoder });
+  const { namespace } = await appExecPromise;
+  t.deepEqual(namespace, {
+    xyz: 123,
+  });
   t.deepEqual(log, expectedLog);
 });

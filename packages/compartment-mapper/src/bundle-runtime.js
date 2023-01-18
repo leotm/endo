@@ -138,8 +138,5 @@ import-archive always invokes module record aliases - is this intentional?
 makeModuleInstance + makeThirdPartyModuleInstance
   dont rhyme as much as I'd like
 
-<<<<<<<<<<< TODO
-
-'pre-cjs-json' calls evaluate
 
 */
