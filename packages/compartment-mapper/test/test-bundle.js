@@ -89,7 +89,11 @@ test('secure bundles work', async t => {
     log.push(entry);
   };
   // bundle contains ses-shim and lockdown() call so we run in fresh Realm
-  const appExecPromise = vm.runInNewContext(bundle, { print, TextDecoder, TextEncoder });
+  const appExecPromise = vm.runInNewContext(bundle, {
+    print,
+    TextDecoder,
+    TextEncoder,
+  });
   const { namespace } = await appExecPromise;
   t.deepEqual(namespace, {
     xyz: 123,

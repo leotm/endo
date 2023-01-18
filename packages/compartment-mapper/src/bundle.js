@@ -16,6 +16,8 @@
 import fs from 'fs';
 /* eslint-disable-next-line import/no-unresolved */
 import { evadeImportExpressionTest } from 'ses/transforms';
+// TODO: import from SES
+import { makeStrictScopeHandler } from './strict-scope-handler.js';
 import { resolve } from './node-module-specifier.js';
 import { compartmentMapForNodeModules } from './node-modules.js';
 import { search } from './search.js';
@@ -238,6 +240,106 @@ export const prepareToBundle = async (read, moduleLocation, options) => {
   return { compartmentMap, sources, resolvers };
 };
 
+/**
+ * @param {ReadFn} read
+ * @param {string} moduleLocation
+ * @param {Object} [options]
+ * @param {ModuleTransforms} [options.moduleTransforms]
+ * @param {boolean} [options.dev]
+ * @param {Set<string>} [options.tags]
+ * @param {Array<string>} [options.searchSuffixes]
+ * @param {Object} [options.commonDependencies]
+ * @returns {Promise<string>}
+ */
+export const makeBundle = async (read, moduleLocation, options) => {
+  const { compartmentMap, sources, resolvers } = await prepareToBundle(
+    read,
+    moduleLocation,
+    options,
+  );
+
+  const {
+    entry: { compartment: entryCompartmentName, module: entryModuleSpecifier },
+  } = compartmentMap;
+
+  const modules = sortedModules(
+    compartmentMap.compartments,
+    sources,
+    resolvers,
+    entryCompartmentName,
+    entryModuleSpecifier,
+  );
+
+  // Create an index of modules so we can resolve import specifiers to the
+  // index of the corresponding functor.
+  const modulesByKey = Object.create(null);
+  for (let index = 0; index < modules.length; index += 1) {
+    const module = modules[index];
+    module.index = index;
+    modulesByKey[module.key] = module;
+  }
+  const parsersInUse = new Set();
+  for (const module of modules) {
+    module.indexedImports = Object.fromEntries(
+      Object.entries(module.resolvedImports).map(([importSpecifier, key]) => [
+        importSpecifier,
+        modulesByKey[key].index,
+      ]),
+    );
+    parsersInUse.add(module.parser);
+    module.bundlerKit = getBundlerKitForModule(module);
+  }
+
+  const bundle = `\
+'use strict';
+(() => {
+  const functors = [
+${''.concat(modules.map(m => m.bundlerKit.getFunctor()).join(','))}\
+]; // functors end
+
+  const cell = (name, value = undefined) => {
+    const observers = [];
+    return Object.freeze({
+      get: Object.freeze(() => {
+        return value;
+      }),
+      set: Object.freeze((newValue) => {
+        value = newValue;
+        for (const observe of observers) {
+          observe(value);
+        }
+      }),
+      observe: Object.freeze((observe) => {
+        observers.push(observe);
+        observe(value);
+      }),
+      enumerable: true,
+    });
+  };
+
+  const cells = [
+${''.concat(...modules.map(m => m.bundlerKit.getCells()))}\
+  ];
+
+${''.concat(...modules.map(m => m.bundlerKit.getReexportsWiring()))}\
+
+  const namespaces = cells.map(cells => Object.freeze(Object.create(null, cells)));
+
+  for (let index = 0; index < namespaces.length; index += 1) {
+    cells[index]['*'] = cell('*', namespaces[index]);
+  }
+
+${''.concat(...Array.from(parsersInUse).map(parser => getRuntime(parser)))}
+
+${''.concat(...modules.map(m => m.bundlerKit.getFunctorCall()))}\
+
+  return cells[cells.length - 1]['*'].get();
+})();
+`;
+
+  return bundle;
+};
+
 function wrapFunctorInPrecompiledModule(functorSrc, compartmentName) {
   const wrappedSrc = `() => (function(){
   with (this.scopeTerminator) {
@@ -252,6 +354,36 @@ ${functorSrc}
   }
 }).call(getEvalKitForCompartment(${JSON.stringify(compartmentName)}))()`;
   return wrappedSrc;
+}
+
+// This function is serialized and references variables from its destination scope.
+function getCompartmentByName(name) {
+  /* eslint-disable no-undef */
+  let compartment = compartments[name];
+  if (compartment === undefined) {
+    compartment = new Compartment();
+    compartments[name] = compartment;
+  }
+  return compartment;
+  /* eslint-enable no-undef */
+}
+
+// This function is serialized and references variables from its destination scope.
+function getEvalKitForCompartment(compartmentName) {
+  /* eslint-disable no-undef */
+  const compartment = getCompartmentByName(compartmentName);
+  const scopeTerminator = strictScopeTerminator;
+  const { globalThis } = compartment;
+  return { globalThis, scopeTerminator };
+  /* eslint-enable no-undef */
+}
+
+function renderFunctorTable(functorTable) {
+  const entries = Object.entries(functorTable);
+  const lines = entries.map(
+    ([key, value]) => `${JSON.stringify(key)}: ${value}`,
+  );
+  return `{\n${lines.map(line => `  ${line}`).join(',\n')}\n};`;
 }
 
 /**
@@ -366,130 +498,6 @@ execute()
   return bundle;
 };
 
-function getCompartmentByName(name) {
-  let compartment = compartments[name];
-  if (compartment === undefined) {
-    compartment = new Compartment();
-    compartments[name] = compartment;
-  }
-  return compartment;
-}
-
-function getEvalKitForCompartment(compartmentName) {
-  const compartment = getCompartmentByName(compartmentName);
-  const scopeTerminator = strictScopeTerminator;
-  const { globalThis } = compartment;
-  return { globalThis, scopeTerminator };
-}
-
-function renderFunctorTable(functorTable) {
-  const entries = Object.entries(functorTable);
-  const lines = entries.map(
-    ([key, value]) => `${JSON.stringify(key)}: ${value}`,
-  );
-  return `{\n${lines.map(line => `  ${line}`).join(',\n')}\n};`;
-}
-
-/**
- * @param {ReadFn} read
- * @param {string} moduleLocation
- * @param {Object} [options]
- * @param {ModuleTransforms} [options.moduleTransforms]
- * @param {boolean} [options.dev]
- * @param {Set<string>} [options.tags]
- * @param {Array<string>} [options.searchSuffixes]
- * @param {Object} [options.commonDependencies]
- * @returns {Promise<string>}
- */
-export const makeBundle = async (read, moduleLocation, options) => {
-  const { compartmentMap, sources, resolvers } = await prepareToBundle(
-    read,
-    moduleLocation,
-    options,
-  );
-
-  const {
-    entry: { compartment: entryCompartmentName, module: entryModuleSpecifier },
-  } = compartmentMap;
-
-  const modules = sortedModules(
-    compartmentMap.compartments,
-    sources,
-    resolvers,
-    entryCompartmentName,
-    entryModuleSpecifier,
-  );
-
-  // Create an index of modules so we can resolve import specifiers to the
-  // index of the corresponding functor.
-  const modulesByKey = Object.create(null);
-  for (let index = 0; index < modules.length; index += 1) {
-    const module = modules[index];
-    module.index = index;
-    modulesByKey[module.key] = module;
-  }
-  const parsersInUse = new Set();
-  for (const module of modules) {
-    module.indexedImports = Object.fromEntries(
-      Object.entries(module.resolvedImports).map(([importSpecifier, key]) => [
-        importSpecifier,
-        modulesByKey[key].index,
-      ]),
-    );
-    parsersInUse.add(module.parser);
-    module.bundlerKit = getBundlerKitForModule(module);
-  }
-
-  const bundle = `\
-'use strict';
-(() => {
-  const functors = [
-${''.concat(modules.map(m => m.bundlerKit.getFunctor()).join(','))}\
-]; // functors end
-
-  const cell = (name, value = undefined) => {
-    const observers = [];
-    return Object.freeze({
-      get: Object.freeze(() => {
-        return value;
-      }),
-      set: Object.freeze((newValue) => {
-        value = newValue;
-        for (const observe of observers) {
-          observe(value);
-        }
-      }),
-      observe: Object.freeze((observe) => {
-        observers.push(observe);
-        observe(value);
-      }),
-      enumerable: true,
-    });
-  };
-
-  const cells = [
-${''.concat(...modules.map(m => m.bundlerKit.getCells()))}\
-  ];
-
-${''.concat(...modules.map(m => m.bundlerKit.getReexportsWiring()))}\
-
-  const namespaces = cells.map(cells => Object.freeze(Object.create(null, cells)));
-
-  for (let index = 0; index < namespaces.length; index += 1) {
-    cells[index]['*'] = cell('*', namespaces[index]);
-  }
-
-${''.concat(...Array.from(parsersInUse).map(parser => getRuntime(parser)))}
-
-${''.concat(...modules.map(m => m.bundlerKit.getFunctorCall()))}\
-
-  return cells[cells.length - 1]['*'].get();
-})();
-`;
-
-  return bundle;
-};
-
 /**
  * @param {WriteFn} write
  * @param {ReadFn} read
@@ -508,99 +516,3 @@ export const writeBundle = async (
   const bundleBytes = textEncoder.encode(bundleString);
   await write(bundleLocation, bundleBytes);
 };
-
-// TODO: import from ses
-function makeStrictScopeHandler() {
-  const { freeze, create, getOwnPropertyDescriptors } = Object;
-  const immutableObject = freeze(create(null));
-
-  // import { assert } from './error/assert.js';
-  const assert = {
-    fail: msg => {
-      throw new Error(msg);
-    },
-  };
-
-  // const { details: d, quote: q } = assert;
-  const d = (strings, args) => strings.join() + args.join();
-  const q = arg => arg;
-
-  /**
-   * alwaysThrowHandler
-   * This is an object that throws if any property is called. It's used as
-   * a proxy handler which throws on any trap called.
-   * It's made from a proxy with a get trap that throws. It's safe to
-   * create one and share it between all Proxy handlers.
-   */
-  const alwaysThrowHandler = new Proxy(
-    immutableObject,
-    freeze({
-      get(_shadow, prop) {
-        // eslint-disable-next-line @endo/no-polymorphic-call
-        assert.fail(
-          d`Please report unexpected scope handler trap: ${q(String(prop))}`,
-        );
-      },
-    }),
-  );
-
-  /*
-   * scopeProxyHandlerProperties
-   * scopeTerminatorHandler manages a strictScopeTerminator Proxy which serves as
-   * the final scope boundary that will always return "undefined" in order
-   * to prevent access to "start compartment globals".
-   */
-  const scopeProxyHandlerProperties = {
-    get(_shadow, _prop) {
-      return undefined;
-    },
-
-    set(_shadow, prop, _value) {
-      // We should only hit this if the has() hook returned true matches the v8
-      // ReferenceError message "Uncaught ReferenceError: xyz is not defined"
-      throw new ReferenceError(`${String(prop)} is not defined`);
-    },
-
-    has(_shadow, prop) {
-      // we must at least return true for all properties on the realm globalThis
-      return prop in globalThis;
-    },
-
-    // note: this is likely a bug of safari
-    // https://bugs.webkit.org/show_bug.cgi?id=195534
-    getPrototypeOf() {
-      return null;
-    },
-
-    // Chip has seen this happen single stepping under the Chrome/v8 debugger.
-    // TODO record how to reliably reproduce, and to test if this fix helps.
-    // TODO report as bug to v8 or Chrome, and record issue link here.
-    getOwnPropertyDescriptor(_target, prop) {
-      // Coerce with `String` in case prop is a symbol.
-      const quotedProp = q(String(prop));
-      // eslint-disable-next-line @endo/no-polymorphic-call
-      console.warn(
-        `getOwnPropertyDescriptor trap on scopeTerminatorHandler for ${quotedProp}`,
-        new TypeError().stack,
-      );
-      return undefined;
-    },
-  };
-
-  // The scope handler's prototype is a proxy that throws if any trap other
-  // than get/set/has are run (like getOwnPropertyDescriptors, apply,
-  // getPrototypeOf).
-  const strictScopeTerminatorHandler = freeze(
-    create(
-      alwaysThrowHandler,
-      getOwnPropertyDescriptors(scopeProxyHandlerProperties),
-    ),
-  );
-
-  const strictScopeTerminator = new Proxy(
-    immutableObject,
-    strictScopeTerminatorHandler,
-  );
-
-  return { strictScopeTerminator };
-}

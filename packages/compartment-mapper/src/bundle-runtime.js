@@ -2,9 +2,7 @@
 /** @typedef {import('ses').RedirectStaticModuleInterface} RedirectStaticModuleInterface */
 
 import { link } from './link.js';
-import {
-  makeArchiveImportHookMaker,
-} from './import-archive.js';
+import { makeArchiveImportHookMaker } from './import-archive.js';
 
 const textEncoder = new TextEncoder();
 
@@ -26,7 +24,7 @@ export function loadApplication(
 
   const {
     compartments: compartmentDescriptors,
-    entry: { module: moduleSpecifier },
+    entry: { module: entrySpecifier },
   } = compartmentMap;
 
   const archiveMakeImportHook = makeArchiveImportHookMaker(
@@ -37,12 +35,14 @@ export function loadApplication(
     computeSourceLocation,
   );
 
-  const makeImportHook = (
-    packageLocation, packageName
-  ) => {
-    const archiveImportHook = archiveMakeImportHook(packageLocation, packageName);
-    const { modules: moduleDescriptors } = compartmentDescriptors[packageLocation];
-    const importHook = async (moduleSpecifier) => {
+  const makeImportHook = (packageLocation, packageName) => {
+    const archiveImportHook = archiveMakeImportHook(
+      packageLocation,
+      packageName,
+    );
+    const { modules: moduleDescriptors } =
+      compartmentDescriptors[packageLocation];
+    const importHook = async moduleSpecifier => {
       /* this is actually a RedirectStaticModuleInterface */
       const staticModuleRecord = await archiveImportHook(moduleSpecifier);
       // archiveImportHook always setups on an alias record
@@ -52,11 +52,12 @@ export function loadApplication(
       const moduleDescriptor = moduleDescriptors[moduleSpecifier];
       const moduleLocation = `${packageLocation}/${moduleDescriptor.location}`;
       const makeModuleFunctor = moduleFunctors[moduleLocation];
-      aliasModuleRecord.__precompiledFunctor__ = makeModuleFunctor()
+      /* eslint-disable-next-line no-underscore-dangle */
+      aliasModuleRecord.__precompiledFunctor__ = makeModuleFunctor();
       return staticModuleRecord;
     };
     return importHook;
-  }
+  };
 
   const { compartment, compartments } = link(compartmentMap, {
     makeImportHook,
@@ -69,16 +70,14 @@ export function loadApplication(
     Compartment,
   });
 
-
   /** @type {ExecuteFn} */
   const execute = () => {
     // eslint-disable-next-line dot-notation
-    return compartment['import'](moduleSpecifier);
+    return compartment['import'](entrySpecifier);
   };
 
   return { execute, compartments };
 }
-
 
 /*
 
