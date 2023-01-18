@@ -94,8 +94,8 @@ export const makeThirdPartyModuleInstance = (
       if (!localState.activated) {
         activate();
         localState.activated = true;
-        const { __precompiledFunctor__ } = staticModuleRecord;
         try {
+          const { __precompiledFunctor__ } = staticModuleRecord;
           // eslint-disable-next-line @endo/no-polymorphic-call
           staticModuleRecord.execute(
             proxiedExports,
@@ -112,7 +112,14 @@ export const makeThirdPartyModuleInstance = (
   });
 };
 
-export const prepareModuleFunctorArguments = (
+// `makeModuleInstance` takes a module's compartment record, the live import
+// namespace, and a global object; and produces a module instance.
+// The module instance carries the proxied module exports namespace (the
+// "exports"), notifiers to update the module's internal import namespace, and
+// an idempotent execute function.
+// The module exports namespace is a proxy to the proxied exports namespace
+// that the execution of the module instance populates.
+export const makeModuleInstance = (
   privateFields,
   moduleAliases,
   moduleRecord,
@@ -124,27 +131,21 @@ export const prepareModuleFunctorArguments = (
     staticModuleRecord,
     importMeta: moduleRecordMeta,
   } = moduleRecord;
-
   const {
     reexports: exportAlls = [],
+    __syncModuleProgram__: functorSource,
     __fixedExportMap__: fixedExportMap = {},
     __liveExportMap__: liveExportMap = {},
     __reexportMap__: reexportMap = {},
     __needsImportMeta__: needsImportMeta = false,
+    __precompiledFunctor__,
   } = staticModuleRecord;
 
   const compartmentFields = weakmapGet(privateFields, compartment);
 
-  const { importMetaHook } = compartmentFields;
+  const { __shimTransforms__, importMetaHook } = compartmentFields;
 
-  const {
-    // used by notifiers and imports() fn
-    proxiedExports,
-    // called at end of imports() fn
-    activate,
-    // not used here
-    exportsProxy
-  } = getDeferredExports(
+  const { exportsProxy, proxiedExports, activate } = getDeferredExports(
     compartment,
     compartmentFields,
     moduleAliases,
@@ -446,65 +447,16 @@ export const prepareModuleFunctorArguments = (
     activate();
   }
 
-  return {
-    notifiers,
-    exportsProxy,
-    moduleLexicals,
-    // functor args
-    imports,
-    onceVar,
-    liveVar,
-    importMeta,
-  };
-};
-
-// `makeModuleInstance` takes a module's compartment record, the live import
-// namespace, and a global object; and produces a module instance.
-// The module instance carries the proxied module exports namespace (the
-// "exports"), notifiers to update the module's internal import namespace, and
-// an idempotent execute function.
-// The module exports namespace is a proxy to the proxied exports namespace
-// that the execution of the module instance populates.
-export const makeModuleInstance = (
-  privateFields,
-  moduleAliases,
-  moduleRecord,
-  importedInstances,
-) => {
-  const {
-    compartment,
-    staticModuleRecord,
-  } = moduleRecord;
-
-  const { __syncModuleProgram__: functorSource, __precompiledFunctor__ } = staticModuleRecord;
-
-  const compartmentFields = weakmapGet(privateFields, compartment);
-  const { __shimTransforms__ } = compartmentFields;
-
-  const {
-    imports,
-    onceVar,
-    liveVar,
-    importMeta,
-    moduleLexicals,
-    notifiers,
-    exportsProxy,
-  } = prepareModuleFunctorArguments(
-    privateFields,
-    moduleAliases,
-    moduleRecord,
-    importedInstances,
-  );
-
-  let optFunctor = __precompiledFunctor__
-  if (optFunctor === undefined) {
+  let optFunctor
+  if (__precompiledFunctor__ !== undefined) {
+    optFunctor = __precompiledFunctor__;
+  } else {
     optFunctor = compartmentEvaluate(compartmentFields, functorSource, {
       globalObject: compartment.globalThis,
       transforms: __shimTransforms__,
       __moduleShimLexicals__: moduleLexicals,
     });
   }
-
   let didThrow = false;
   let thrownError;
   function execute() {
