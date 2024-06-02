@@ -522,7 +522,7 @@ const asyncJobQueue = () => {
    *
    * @returns {Promise<Array<Error>>}
    */
-  const drainQueue = async () => {
+  async function drainQueue () {
     await null;
     for (const job of pendingJobs) {
       // eslint-disable-next-line no-await-in-loop
@@ -562,12 +562,12 @@ const preferAsync = (asyncImpl, _syncImpl) => asyncImpl;
  * compartment and the specifier of the module within its own compartment.
  * This graph is then ready to be synchronously linked and executed.
  */
-export const load = async (
+export async function load (
   compartmentPrivateFields,
   moduleAliases,
   compartment,
   moduleSpecifier,
-) => {
+) {
   const { name: compartmentName } = weakmapGet(
     compartmentPrivateFields,
     compartment,
