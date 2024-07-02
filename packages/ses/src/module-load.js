@@ -522,14 +522,14 @@ const asyncJobQueue = () => {
    *
    * @returns {Promise<Array<Error>>}
    */
-  async function drainQueue () {
+  async function drainQueue() {
     await null;
     for (const job of pendingJobs) {
       // eslint-disable-next-line no-await-in-loop
       await job;
     }
     return errors;
-  };
+  }
   return { enqueueJob, drainQueue };
 };
 
@@ -562,7 +562,7 @@ const preferAsync = (asyncImpl, _syncImpl) => asyncImpl;
  * compartment and the specifier of the module within its own compartment.
  * This graph is then ready to be synchronously linked and executed.
  */
-export async function load (
+export async function load(
   compartmentPrivateFields,
   moduleAliases,
   compartment,
@@ -597,7 +597,7 @@ export async function load (
       compartmentName,
     )}`,
   });
-};
+}
 
 /*
  * `loadNow` synchronously gathers the module records for a specified module
