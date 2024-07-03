@@ -142,6 +142,7 @@ export const getAnonymousIntrinsics = () => {
       '%AsyncIteratorPrototype%': AsyncIteratorPrototype,
     });
   } catch {
+    // Silently swallow Hermes SyntaxError `async generators are unsupported` at runtime
     //
   }
 

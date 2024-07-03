@@ -135,7 +135,7 @@ export default function tameFunctionConstructors() {
       '(async function*(){})',
     );
   } catch {
-    //
+    // Silently swallow Hermes SyntaxError `async generators are unsupported` at runtime
   }
 
   return newIntrinsics;
