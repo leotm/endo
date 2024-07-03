@@ -25,6 +25,9 @@ test('Compartment anonymous intrinsics are frozen', t => {
   t.throws(() => c.evaluate('(async function() {}).constructor.a = 10;'), {
     instanceOf: TypeError,
   });
+  t.throws(() => c.evaluate('(async function*() {}).constructor.a = 10;'), {
+    instanceOf: TypeError,
+  });
   t.throws(() => c.evaluate('(function*() {}).constructor.a = 10;'), {
     instanceOf: TypeError,
   });
