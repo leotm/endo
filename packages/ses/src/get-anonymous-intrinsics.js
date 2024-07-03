@@ -143,7 +143,6 @@ export const getAnonymousIntrinsics = () => {
     });
   } catch {
     // Silently swallow Hermes SyntaxError `async generators are unsupported` at runtime
-    //
   }
 
   if (globalThis.Iterator) {
