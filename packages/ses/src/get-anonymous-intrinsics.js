@@ -128,8 +128,8 @@ export const getAnonymousIntrinsics = () => {
   } catch {
     // Silently swallow Hermes SyntaxError `async generators are unsupported` at runtime
   }
-  
-  if (AsyncGeneratorFunctionInstance !== undefined) {  
+
+  if (AsyncGeneratorFunctionInstance !== undefined) {
     // 25.3.1 The AsyncGeneratorFunction Constructor
 
     const AsyncGeneratorFunction = getConstructorOf(
