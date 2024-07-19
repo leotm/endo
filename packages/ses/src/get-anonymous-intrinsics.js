@@ -118,13 +118,20 @@ export const getAnonymousIntrinsics = () => {
     '%InertCompartment%': InertCompartment,
   };
 
+  // Test for support async generator function syntax.
+  let AsyncGeneratorFunctionInstance;
   try {
-    // 25.3.1 The AsyncGeneratorFunction Constructor
-
     // eslint-disable-next-line no-empty-function
-    const AsyncGeneratorFunctionInstance = new FERAL_FUNCTION(
+    AsyncGeneratorFunctionInstance = new FERAL_FUNCTION(
       'return (async function* AsyncGeneratorFunctionInstance() {})',
     )();
+  } catch {
+    // Silently swallow Hermes SyntaxError `async generators are unsupported` at runtime
+  }
+  
+  if (AsyncGeneratorFunctionInstance !== undefined) {  
+    // 25.3.1 The AsyncGeneratorFunction Constructor
+
     const AsyncGeneratorFunction = getConstructorOf(
       AsyncGeneratorFunctionInstance,
     );
@@ -141,8 +148,6 @@ export const getAnonymousIntrinsics = () => {
       '%AsyncGeneratorPrototype%': AsyncGeneratorPrototype,
       '%AsyncIteratorPrototype%': AsyncIteratorPrototype,
     });
-  } catch {
-    // Silently swallow Hermes SyntaxError `async generators are unsupported` at runtime
   }
 
   if (globalThis.Iterator) {
