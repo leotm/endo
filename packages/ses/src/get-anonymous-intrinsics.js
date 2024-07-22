@@ -126,7 +126,9 @@ export const getAnonymousIntrinsics = () => {
       'return (async function* AsyncGeneratorFunctionInstance() {})',
     )();
   } catch {
-    // Silently swallow Hermes SyntaxError `async generators are unsupported` at runtime
+    // Swallows Hermes SyntaxError `async generators are unsupported` at runtime.
+    // eslint-disable-next-line @endo/no-polymorphic-call
+    console.info('skipping async generators');
   }
 
   if (AsyncGeneratorFunctionInstance !== undefined) {
