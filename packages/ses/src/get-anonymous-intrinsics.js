@@ -121,7 +121,6 @@ export const getAnonymousIntrinsics = () => {
   // Test for support async generator function syntax.
   let AsyncGeneratorFunctionInstance;
   try {
-    // eslint-disable-next-line no-empty-function
     AsyncGeneratorFunctionInstance = new FERAL_FUNCTION(
       'return (async function* AsyncGeneratorFunctionInstance() {})',
     )();
