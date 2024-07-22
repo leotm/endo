@@ -137,7 +137,7 @@ export default function tameFunctionConstructors() {
   } catch {
     // Swallows Hermes SyntaxError `async generators are unsupported` at runtime.
     // eslint-disable-next-line @endo/no-polymorphic-call
-    console.info('skipping async generators');
+    console.info('tameFunctionConstructors: skipping async generators');
   }
 
   return newIntrinsics;
