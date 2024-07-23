@@ -25,7 +25,7 @@ import { makeError, annotateError, q, X } from './error/assert.js';
 
 const noop = () => {};
 
-const asyncTrampoline = async (generatorFunc, args, errorWrapper) => {
+async function asyncTrampoline(generatorFunc, args, errorWrapper) {
   await null;
   const iterator = generatorFunc(...args);
   let result = generatorNext(iterator);
@@ -39,7 +39,7 @@ const asyncTrampoline = async (generatorFunc, args, errorWrapper) => {
     }
   }
   return result.value;
-};
+}
 
 const syncTrampoline = (generatorFunc, args) => {
   const iterator = generatorFunc(...args);
