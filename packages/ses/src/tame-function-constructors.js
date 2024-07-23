@@ -128,7 +128,6 @@ export default function tameFunctionConstructors() {
     '(async function(){})',
   );
 
-  // Test for async generator function syntax support.
   if (AsyncGeneratorFunctionInstance !== undefined) {
     repairFunction(
       'AsyncGeneratorFunction',

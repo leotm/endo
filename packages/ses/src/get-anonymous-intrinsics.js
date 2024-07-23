@@ -119,7 +119,6 @@ export const getAnonymousIntrinsics = () => {
     '%InertCompartment%': InertCompartment,
   };
 
-  // Test for async generator function syntax support.
   if (AsyncGeneratorFunctionInstance !== undefined) {
     // 25.3.1 The AsyncGeneratorFunction Constructor
 
