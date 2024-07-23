@@ -15,6 +15,7 @@ import {
   regexpPrototype,
   globalThis,
   assign,
+  AsyncGeneratorFunctionInstance,
 } from './commons.js';
 import { InertCompartment } from './compartment.js';
 
@@ -118,18 +119,7 @@ export const getAnonymousIntrinsics = () => {
     '%InertCompartment%': InertCompartment,
   };
 
-  // Test for support async generator function syntax.
-  let AsyncGeneratorFunctionInstance;
-  try {
-    AsyncGeneratorFunctionInstance = new FERAL_FUNCTION(
-      'return (async function* AsyncGeneratorFunctionInstance() {})',
-    )();
-  } catch {
-    // Swallows Hermes SyntaxError `async generators are unsupported` at runtime.
-    // eslint-disable-next-line @endo/no-polymorphic-call
-    console.info('getAnonymousIntrinsics: skipping async generators');
-  }
-
+  // Test for async generator function syntax support.
   if (AsyncGeneratorFunctionInstance !== undefined) {
     // 25.3.1 The AsyncGeneratorFunction Constructor
 

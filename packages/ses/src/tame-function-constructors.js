@@ -6,6 +6,7 @@ import {
   getPrototypeOf,
   setPrototypeOf,
   freeze,
+  AsyncGeneratorFunctionInstance,
 } from './commons.js';
 
 // This module replaces the original `Function` constructor, and the original
@@ -127,17 +128,13 @@ export default function tameFunctionConstructors() {
     '(async function(){})',
   );
 
-  try {
-    new FERAL_FUNCTION('async function* AsyncGeneratorFunctionInstance() {}')();
+  // Test for async generator function syntax support.
+  if (AsyncGeneratorFunctionInstance !== undefined) {
     repairFunction(
       'AsyncGeneratorFunction',
       '%InertAsyncGeneratorFunction%',
       '(async function*(){})',
     );
-  } catch {
-    // Swallows Hermes SyntaxError `async generators are unsupported` at runtime.
-    // eslint-disable-next-line @endo/no-polymorphic-call
-    console.info('tameFunctionConstructors: skipping async generators');
   }
 
   return newIntrinsics;
