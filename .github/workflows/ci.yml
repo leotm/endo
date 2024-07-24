@@ -282,6 +282,59 @@ jobs:
         # npm b/c Yarn 4 doesn't work in Node 12
         run: cd packages/ses && npm run test:platform-compatibility
 
+  hermes-test:
+    name: hermes-test
+
+    # begin macro
+
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18.x, 20.x]
+        platform: [ubuntu-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # without this, setup-node errors on mismatched yarn versions
+      - run: corepack enable
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: yarn
+
+      - name: Echo node version
+        run: node --version
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      # end macro
+
+      - name: 'build'
+        run: yarn run build
+
+      - name: Echo node version
+        run: node --version
+
+      - name: Get Hermes CLI for Linux tar file
+        run: cd packages/ses; mkdir hermes; cd hermes; curl -O https://github.com/facebook/hermes/releases/download/v0.12.0/hermes-cli-linux-v0.12.0.tar.gz 
+
+      - name: Extract tar file
+        run: tar -xzvf https://github.com/facebook/hermes/releases/download/v0.12.0/hermes-cli-linux-v0.12.0.tar.gz; cd ..
+
+      - name: Run test:hermesc
+        run: npm run test:hermesc
+      # errors on async (arrow) functions and async generators
+
+      - name: Run test:hermes
+        run: npm run test:hermes
+      # SES TypeErrors expected until resolved and hardenIntrinsics loop
+
   viable-release:
     name: viable-release
 
