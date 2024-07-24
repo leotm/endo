@@ -322,7 +322,7 @@ jobs:
         run: node --version
 
       - name: Get Hermes CLI for Linux tar file
-        run: cd packages/ses; mkdir hermes; cd hermes; wget https://github.com/facebook/hermes/releases/download/v0.12.0/hermes-cli-linux-v0.12.0.tar.gz
+        run: cd packages/ses && mkdir hermes && cd hermes && wget https://github.com/facebook/hermes/releases/download/v0.12.0/hermes-cli-linux-v0.12.0.tar.gz
 
       - name: Extract tar file
         run: tar -xzvf hermes-cli-linux-v0.12.0.tar.gz; cd ..
