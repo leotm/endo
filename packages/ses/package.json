@@ -73,7 +73,8 @@
     "prepare": "npm run clean && npm run build",
     "qt": "ava",
     "test": "tsd && ava",
-    "test:platform-compatibility": "node test/package/test.cjs"
+    "test:platform-compatibility": "node test/package/test.cjs",
+    "test:hermesc": "cd hermes && ./hermesc -emit-binary -out hermes-smoke.hbc ../test/hermes-smoke.js"
   },
   "dependencies": {
     "@endo/env-options": "^1.1.4"
