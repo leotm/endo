@@ -74,7 +74,8 @@
     "qt": "ava",
     "test": "tsd && ava",
     "test:platform-compatibility": "node test/package/test.cjs",
-    "test:hermesc": "cd hermes && ./hermesc -emit-binary -out hermes-smoke.hbc ../test/hermes-smoke.js"
+    "test:hermesc": "cd hermes && ./hermesc -emit-binary -out hermes-smoke.hbc ../test/hermes-smoke.js",
+    "test:hermes": "cd hermes && ./hermes -b hermes-smoke.hbc"
   },
   "dependencies": {
     "@endo/env-options": "^1.1.4"
