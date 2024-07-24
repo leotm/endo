@@ -325,7 +325,7 @@ jobs:
         run: cd packages/ses; mkdir hermes; cd hermes; curl -O https://github.com/facebook/hermes/releases/download/v0.12.0/hermes-cli-linux-v0.12.0.tar.gz
 
       - name: Extract tar file
-        run: tar -xzvf https://github.com/facebook/hermes/releases/download/v0.12.0/hermes-cli-linux-v0.12.0.tar.gz; cd ..
+        run: tar -xzvf hermes-cli-linux-v0.12.0.tar.gz; cd ..
 
       - name: Run test:hermesc
         run: npm run test:hermesc
