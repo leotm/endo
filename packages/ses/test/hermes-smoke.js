@@ -34,7 +34,7 @@ const compartment = new Compartment({}, {}, { resolveHook, importHook });
 const module = compartment.module('.');
 
 const {
-  namespace: { meaning },
+  namespace: { _meaning },
 } = await compartment.import('.');
 
 assert(module);
