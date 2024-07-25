@@ -318,9 +318,6 @@ jobs:
       - name: 'build'
         run: yarn run build
 
-      - name: Echo node version
-        run: node --version
-
       - name: Get Hermes CLI for Linux tar file
         run: cd packages/ses && mkdir hermes && cd hermes && wget https://github.com/facebook/hermes/releases/download/v0.12.0/hermes-cli-linux-v0.12.0.tar.gz
 
