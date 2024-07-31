@@ -19,7 +19,7 @@ c.evaluate("const c2 = new Compartment(); c2.evaluate('1+2')");
 // https://github.com/facebook/hermes/blob/main/doc/Features.md
 // In Progress: ES modules (`import` and `export`)
 
-const resolveHook = '';
+const resolveHook = (a) => a;
 
 async function importHook() {
   return {
