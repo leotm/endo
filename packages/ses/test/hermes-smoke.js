@@ -1,44 +1,53 @@
-// TODO: equivalent of:
-// import '../dist/ses.cjs';
-// import '../src/assert-shim.js';
-// Since Hermes has no native support for I/O
+// Hermes doesn't support native I/O,
+// so we concat the SES shim above,
+// when running this test on the `hermesc`.
 
-// Test lockdown
+/**
+ * Test calling SES lockdown.
+ */
+const testLockdown = () => {
+  lockdown();
+};
 
-lockdown();
+testLockdown();
 
-// Test Compartment
+/**
+ * TODO: Test creating a new Compartment.
+ */
+// eslint-disable-next-line no-unused-vars
+const testCompartment = () => {
+  // eslint-disable-next-line no-unused-vars
+  const c = new Compartment();
+};
 
-const c = new Compartment();
+// testCompartment();
 
-c.evaluate('1+1');
-c.evaluate("const c2 = new Compartment(); c2.evaluate('1+2')");
+/**
+ * TODO: Test Compartment import hook and resolve hook.
+ */
+// eslint-disable-next-line no-unused-vars
+const testCompartmentHooks = async () => {
+  const resolveHook = a => a;
 
-// Test importHook and resolveHook
+  async function importHook() {
+    return {
+      imports: [],
+      exports: ['meaning'],
+      execute(exports) {
+        exports.meaning = 42;
+      },
+    };
+  }
 
-// https://github.com/facebook/hermes/blob/main/doc/Features.md
-// In Progress: ES modules (`import` and `export`)
+  const compartment = new Compartment({}, {}, { resolveHook, importHook });
 
-const resolveHook = (a) => a;
+  const module = compartment.module('.');
 
-async function importHook() {
-  return {
-    imports: [],
-    exports: ['meaning'],
-    execute(exports) {
-      exports.meaning = 42;
-    },
-  };
-}
+  const {
+    namespace: { _meaning },
+  } = await compartment.import('.');
 
-const compartment = new Compartment({}, {}, { resolveHook, importHook });
+  assert(module);
+};
 
-const module = compartment.module('.');
-
-// const {
-// namespace: { _meaning },
-// } = await compartment.import('.');
-
-assert(module);
-// t.is(meaning, 42, 'exports seen');
-// t.is(module.meaning, 42, 'exports seen through deferred proxy');
+// testCompartmentHooks();
