@@ -74,7 +74,7 @@
     "qt": "ava",
     "test": "tsd && ava",
     "test:platform-compatibility": "node test/package/test.cjs",
-    "test:hermesc": "cd hermes-cli-linux && ./hermesc -emit-binary -out hermes-smoke.hbc ../test/hermes-smoke.js",
+    "test:hermesc": "./scripts/hermesc.sh",
     "test:hermes": "cd hermes-cli-linux && ./hermes -b hermes-smoke.hbc"
   },
   "dependencies": {
