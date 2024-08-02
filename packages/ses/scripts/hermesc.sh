@@ -18,6 +18,7 @@ case "$OS" in
         ;;
 esac
 
+# Path relative to 'packages/ses'
 HERMESC="../../node_modules/hermes-engine-cli/$OS_DIR/hermesc"
 
 $HERMESC -emit-binary -out test/hermes-smoke.hbc test/hermes-smoke.js
