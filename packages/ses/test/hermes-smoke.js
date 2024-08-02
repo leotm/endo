@@ -48,6 +48,6 @@ const testCompartmentHooks = async () => {
   } = await compartment.import('.');
 
   assert(module);
-};
+}
 
 // testCompartmentHooks();
