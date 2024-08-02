@@ -26,7 +26,7 @@ const testCompartment = () => {
  * TODO: Test Compartment import hook and resolve hook.
  */
 // eslint-disable-next-line no-unused-vars
-const testCompartmentHooks = async () => {
+async function testCompartmentHooks() {
   const resolveHook = a => a;
 
   async function importHook() {
