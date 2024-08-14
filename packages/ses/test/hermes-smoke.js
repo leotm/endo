@@ -9,8 +9,6 @@ const testLockdown = () => {
   lockdown();
 };
 
-testLockdown();
-
 /**
  * TODO: Test creating a new Compartment.
  */
@@ -19,8 +17,6 @@ const testCompartment = () => {
   // eslint-disable-next-line no-unused-vars
   const c = new Compartment();
 };
-
-// testCompartment();
 
 /**
  * TODO: Test Compartment import hook and resolve hook.
@@ -49,5 +45,9 @@ async function testCompartmentHooks() {
 
   assert(module);
 }
+
+testLockdown();
+
+// testCompartment();
 
 // testCompartmentHooks();
