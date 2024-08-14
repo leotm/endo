@@ -40,3 +40,8 @@ echo "Hermes compiler done"
 echo "Skipping: Hermes VM"
 
 echo "Hermes tests complete"
+
+echo "Removing: test/hermes-smoke-dist.js"
+rm test/hermes-smoke-dist.js
+echo "Removing: test/hermes-smoke-dist.hbc"
+rm test/hermes-smoke-dist.hbc
