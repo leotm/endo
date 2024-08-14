@@ -75,8 +75,7 @@
     "test": "tsd && ava",
     "test:platform-compatibility": "node test/package/test.cjs",
     "test:create-hermes-bin-symlinks": "./scripts/hermes-bin-symlinks.sh",
-    "test:hermesc": "./scripts/hermesc.sh",
-    "test:hermes": "cd hermes-cli-linux && ./hermes -b hermes-smoke.hbc"
+    "test:hermes": "./scripts/hermes.sh"
   },
   "dependencies": {
     "@endo/env-options": "^1.1.4"
